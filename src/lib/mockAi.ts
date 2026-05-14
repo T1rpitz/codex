@@ -31,17 +31,50 @@ function containsChinese(text: string) {
   return /\p{Script=Han}/u.test(text);
 }
 
-function mockTranslateToChinese(text: string) {
-  if (!text.trim()) return "该页没有提取到可翻译文本，建议检查 PDF 是否为扫描图片。";
+function normalizeMainContent(text: string) {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^(page\s*)?\d+$/i.test(line))
+    .filter((line) => !/^\d+\s*\/\s*\d+$/.test(line))
+    .filter((line) => !/\b(university|college|school)\b/i.test(line) || line.length > 80)
+    .filter((line) => !/\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b/.test(line));
+
+  return lines.join("\n").trim() || text.trim();
+}
+
+function translateMainContent(text: string) {
+  const mainContent = normalizeMainContent(text);
+
+  if (!mainContent) return "该页没有提取到可翻译的主要内容。";
   if (containsChinese(text)) {
-    return `本页已经包含中文内容。以下是整理后的中文表达：${preview(text, 520)}`;
+    return preview(mainContent, 900);
   }
 
   const topics = inferChineseTopics(text);
 
-  return `本页主要在说明${topics.join("、")}等内容。可以把它理解为：课件先提出一个核心概念，再说明这个概念为什么重要、包含哪些组成部分，以及它通常如何应用到具体问题中。
+  return `本页主要内容可直译为：围绕${topics.join("、")}展开，说明相关概念、关系、条件或应用方式。
 
-更直白地说，这一页想让你掌握的是：先看清楚主题，再分清定义、条件、步骤和结果之间的关系。`;
+主要信息：${preview(mainContent, 760)}`;
+}
+
+function explainAsLecturer(text: string, pageNumber: number) {
+  const mainContent = normalizeMainContent(text);
+  const topics = inferChineseTopics(mainContent);
+  const theme = topics[0] ?? "本页主题";
+
+  if (!mainContent) {
+    return `1）这一页在讲什么：这一页没有提取到清晰文字，可能是图片型页面或扫描页。
+2）核心概念解释：如果原页是图片、图表或扫描内容，需要先人工查看右侧 PDF 原文，确认标题、图表和正文。
+3）背后的逻辑：文字提取依赖 PDF 内部是否有可复制文本；扫描图像本身没有文字层，所以不能直接提取。
+4）简单例子：就像拍了一张书页照片，照片里“看得见字”，但电脑不一定知道那些字是什么。`;
+  }
+
+  return `1）这一页在讲什么：这一页的核心主题是${theme}，它在帮助你建立对本页主要内容的第一层理解。
+2）核心概念解释：可以先把本页内容拆成“是什么、为什么重要、怎么使用”三类信息。标题通常告诉你主题，正文说明定义或机制，图表则用来展示关系、流程或对比。
+3）背后的逻辑：课件页通常不是孤立的，它会把上一页的问题继续展开。本页如果出现定义，就是在搭基础；如果出现步骤，就是在说明操作方法；如果出现案例或图表，就是在帮助你把抽象概念落到具体情境。
+4）简单例子：如果这一页讲的是一个分析方法，你可以把它想象成做菜的菜谱。标题是菜名，正文是步骤，图表是流程图，限制条件就是“哪些食材不能替换”。掌握这些，你就不只是背内容，而是知道什么时候该怎么用。`;
 }
 
 function inferChineseTopics(text: string) {
@@ -74,35 +107,22 @@ function keywords(courseware: Courseware) {
 }
 
 function buildTranslationStage(courseware: Courseware) {
-  const terms = keywords(courseware);
   const pageSections = courseware.pages
-    .slice(0, 12)
+    .slice(0, 10)
     .map(
-      (page) => `## 第 ${page.pageNumber} 页
+      (page) => `第${page.pageNumber}页：
 
-### 直译
-${mockTranslateToChinese(page.text)}
+【直译】
+${translateMainContent(page.text)}
 
-### 中文讲解
-这一页可以先当成老师在黑板上写出的“主干信息”。阅读时先找三个东西：它在定义什么、它想解决什么问题、它给了什么条件或例子。
-
-举个例子：如果这一页讲的是一个模型或方法，你可以把它想象成“做题工具”。定义告诉你工具叫什么，步骤告诉你怎么用，限制条件告诉你什么时候不要乱用。这样看课件会比逐字背诵更稳。
-
-### 一句话总结
-第 ${page.pageNumber} 页的核心是：把本页信息翻成自己能复述的中文，并抓住它和整节课主题的关系。`
+【讲解】
+${explainAsLecturer(page.text, page.pageNumber)}`
     )
     .join("\n\n");
 
-  return `# 第一阶段：直译与讲解
-
-${pageSections}
-
-## 术语表
-${terms.map((term, index) => `- **术语 ${index + 1}**：${term}。复习时请把它翻成中文定义，并补一个自己的例子。`).join("\n")}
-
-## 整节课总结
-本节课围绕「${courseware.name}」展开。先建立术语和基本概念，再理解每页之间的逻辑关系，最后把知识点转化为可复述、可做题、可迁移的学习材料。`;
+  return pageSections || "未能从 PDF 中提取到可讲解的页面内容。";
 }
+
 
 function buildDeepeningStage(courseware: Courseware) {
   const terms = keywords(courseware).slice(0, 6);

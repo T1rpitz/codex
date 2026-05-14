@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -32,7 +32,7 @@ const stages: LearningStage[] = [
     subtitle: "直译与讲解",
     icon: BookOpen,
     accent: "bg-pine text-white",
-    items: ["逐页翻译", "中文解释", "术语表", "每页总结", "整节课总结"]
+    items: ["10页一批", "逐页直译", "课堂讲解", "左右对照"]
   },
   {
     id: "deepening",
@@ -72,6 +72,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [previewImages, setPreviewImages] = useState<Record<string, string[]>>({});
   const [previewStatus, setPreviewStatus] = useState<Record<string, string>>({});
+  const [translationPaneRatio, setTranslationPaneRatio] = useState(50);
+  const translationPaneRef = useRef<HTMLDivElement | null>(null);
 
   const selectedCourseware = useMemo(
     () => coursewares.find((item) => item.id === selectedId) ?? null,
@@ -207,6 +209,27 @@ export default function Home() {
     }
   }
 
+  function handlePaneResizeStart(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const container = translationPaneRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+
+    function handlePointerMove(moveEvent: globalThis.PointerEvent) {
+      const nextRatio = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+      setTranslationPaneRatio(Math.min(72, Math.max(32, nextRatio)));
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
   const stageEditor = selectedCourseware ? (
     <textarea
       className="h-full min-h-0 w-full rounded-lg border border-line bg-[#fffdf9] p-4 font-mono text-sm leading-7 outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/15"
@@ -282,15 +305,27 @@ export default function Home() {
         </header>
 
         {activeStage.id === "translation" ? (
-          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,42vw)] lg:p-6">
-            <section className="flex min-h-0 flex-col rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div
+            ref={translationPaneRef}
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4 lg:flex-row lg:p-6"
+          >
+            <section
+              className="flex min-h-0 flex-col rounded-lg border border-line bg-white p-4 shadow-soft lg:basis-[var(--translation-pane)]"
+              style={{ "--translation-pane": `calc(${translationPaneRatio}% - 0.5rem)` } as CSSProperties}
+            >
               <div className="mb-3 shrink-0">
                 <h2 className="font-semibold">直译与讲解</h2>
                 <p className="mt-1 text-sm text-ink/52">左侧内容可以编辑，右侧对照 PDF 原文阅读。</p>
               </div>
               <div className="min-h-0 flex-1">{stageEditor}</div>
             </section>
-            <section className="flex min-h-0 flex-col rounded-lg border border-line bg-white p-4 shadow-soft">
+            <button
+              className="hidden w-2 shrink-0 cursor-col-resize rounded-full bg-line transition hover:bg-pine/55 lg:block"
+              onPointerDown={handlePaneResizeStart}
+              aria-label="调整左右区域宽度"
+              title="拖动调整左右区域宽度"
+            />
+            <section className="flex min-h-0 flex-1 flex-col rounded-lg border border-line bg-white p-4 shadow-soft">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">PDF 原文</h2>
