@@ -11,6 +11,7 @@ export type Courseware = {
   id: string;
   name: string;
   fileName: string;
+  fileUrl: string;
   uploadedAt: string;
   pageCount: number;
   pages: PdfPageText[];

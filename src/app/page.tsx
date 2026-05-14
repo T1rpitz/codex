@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  ArrowLeft,
   BookOpen,
   Brain,
   CheckCircle2,
@@ -63,6 +64,7 @@ export default function Home() {
   const [coursewares, setCoursewares] = useState<Courseware[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [activeStageId, setActiveStageId] = useState(stages[0].id);
+  const [view, setView] = useState<"dashboard" | "stage">("dashboard");
   const [outputs, setOutputs] = useState<Record<string, StageOutput>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [generatingStage, setGeneratingStage] = useState<string | null>(null);
@@ -89,10 +91,12 @@ export default function Home() {
     setIsUploading(true);
     try {
       const pages = await extractPdfText(file);
+      const fileUrl = URL.createObjectURL(file);
       const nextCourseware: Courseware = {
         id: crypto.randomUUID(),
         name: file.name.replace(/\.pdf$/i, ""),
         fileName: file.name,
+        fileUrl,
         uploadedAt: new Date().toISOString(),
         pageCount: pages.length,
         pages,
@@ -101,6 +105,7 @@ export default function Home() {
       setCoursewares((current) => [nextCourseware, ...current]);
       setSelectedId(nextCourseware.id);
       setActiveStageId("translation");
+      setView("dashboard");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "PDF 解析失败。");
     } finally {
@@ -158,6 +163,123 @@ export default function Home() {
     if (!selectedCourseware) return;
     const csv = buildAnkiCsv(selectedCourseware);
     downloadTextFile(`${selectedCourseware.name}-anki.csv`, csv, "text/csv;charset=utf-8");
+  }
+
+  function openStage(stageId: LearningStage["id"]) {
+    setActiveStageId(stageId);
+    if (selectedCourseware) setView("stage");
+  }
+
+  const stageEditor = selectedCourseware ? (
+    <textarea
+      className="h-full min-h-[34rem] w-full rounded-lg border border-line bg-[#fffdf9] p-4 font-mono text-sm leading-7 outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/15"
+      placeholder="点击“生成内容”后，学习材料会出现在这里。你可以直接编辑，导出时会保留修改。"
+      value={activeOutput?.content ?? ""}
+      onChange={(event) => updateActiveContent(event.target.value)}
+    />
+  ) : null;
+
+  if (view === "stage" && selectedCourseware) {
+    return (
+      <main className="flex min-h-screen flex-col bg-[#fbfaf7] text-ink">
+        <header className="border-b border-line bg-white/80 px-5 py-4 backdrop-blur lg:px-8">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line bg-white shadow-sm transition hover:border-pine"
+                onClick={() => setView("dashboard")}
+                aria-label="返回总览"
+              >
+                <ArrowLeft size={19} />
+              </button>
+              <div className="min-w-0">
+                <p className="text-sm text-ink/52">
+                  {selectedCourseware.name} · {activeStage.title}
+                </p>
+                <h1 className="truncate text-2xl font-semibold">{activeStage.subtitle}</h1>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {stages.map((stage) => (
+                <button
+                  key={stage.id}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                    activeStageId === stage.id
+                      ? "border-pine bg-pine text-white"
+                      : "border-line bg-white hover:border-pine"
+                  }`}
+                  onClick={() => setActiveStageId(stage.id)}
+                >
+                  {stage.subtitle}
+                </button>
+              ))}
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-pine/90 disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={generatingStage === activeStage.id}
+                onClick={handleGenerate}
+              >
+                {generatingStage === activeStage.id ? (
+                  <Loader2 className="animate-spin" size={17} />
+                ) : (
+                  <Sparkles size={17} />
+                )}
+                {activeOutput ? "重新生成" : "生成内容"}
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-pine"
+                onClick={exportMarkdown}
+              >
+                <Download size={17} />
+                Markdown
+              </button>
+            </div>
+          </div>
+          {error ? (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+        </header>
+
+        {activeStage.id === "translation" ? (
+          <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,42vw)] lg:p-6">
+            <section className="flex min-h-[calc(100vh-8.5rem)] flex-col rounded-lg border border-line bg-white p-4 shadow-soft">
+              <div className="mb-3">
+                <h2 className="font-semibold">直译与讲解</h2>
+                <p className="mt-1 text-sm text-ink/52">左侧内容可以编辑，右侧对照 PDF 原文阅读。</p>
+              </div>
+              <div className="min-h-0 flex-1">{stageEditor}</div>
+            </section>
+            <section className="flex min-h-[calc(100vh-8.5rem)] flex-col rounded-lg border border-line bg-white p-4 shadow-soft">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">PDF 原文</h2>
+                  <p className="mt-1 text-sm text-ink/52">{selectedCourseware.fileName}</p>
+                </div>
+                <span className="rounded-md bg-paper px-2 py-1 text-xs text-ink/58">
+                  {selectedCourseware.pageCount} 页
+                </span>
+              </div>
+              <iframe
+                className="min-h-0 flex-1 rounded-lg border border-line bg-paper"
+                src={selectedCourseware.fileUrl}
+                title={`${selectedCourseware.name} PDF`}
+              />
+            </section>
+          </div>
+        ) : (
+          <div className="flex-1 p-4 lg:p-6">
+            <section className="mx-auto flex min-h-[calc(100vh-8.5rem)] max-w-6xl flex-col rounded-lg border border-line bg-white p-4 shadow-soft">
+              <div className="mb-3">
+                <h2 className="font-semibold">{activeStage.subtitle}</h2>
+                <p className="mt-1 text-sm text-ink/52">这是该阶段的专门页面，内容可以随时编辑。</p>
+              </div>
+              <div className="min-h-0 flex-1">{stageEditor}</div>
+            </section>
+          </div>
+        )}
+      </main>
+    );
   }
 
   return (
@@ -295,7 +417,7 @@ export default function Home() {
                         ? "border-pine ring-2 ring-pine/18"
                         : "border-line hover:border-pine/45"
                     }`}
-                    onClick={() => setActiveStageId(stage.id)}
+                    onClick={() => openStage(stage.id)}
                   >
                     <div className="mb-4 flex items-start justify-between">
                       <div className={`grid h-10 w-10 place-items-center rounded-lg ${stage.accent}`}>
@@ -304,7 +426,10 @@ export default function Home() {
                       {hasContent ? <CheckCircle2 className="text-pine" size={18} /> : null}
                     </div>
                     <p className="text-sm text-ink/52">{stage.title}</p>
-                    <h3 className="mt-1 font-semibold">{stage.subtitle}</h3>
+                  <h3 className="mt-1 font-semibold">{stage.subtitle}</h3>
+                  <p className="mt-2 text-xs text-ink/45">
+                    {selectedCourseware ? "打开专门学习页" : "上传后可打开"}
+                  </p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {stage.items.slice(0, 3).map((item) => (
                         <span

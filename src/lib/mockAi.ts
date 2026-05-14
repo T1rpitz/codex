@@ -27,6 +27,21 @@ function preview(text: string, length = 220) {
   return text.length > length ? `${text.slice(0, length)}...` : text;
 }
 
+function containsChinese(text: string) {
+  return /\p{Script=Han}/u.test(text);
+}
+
+function mockTranslateToChinese(text: string) {
+  if (!text.trim()) return "该页没有提取到可翻译文本，建议检查 PDF 是否为扫描图片。";
+  if (containsChinese(text)) {
+    return `本页已经包含中文内容。以下是整理后的中文表达：${preview(text, 520)}`;
+  }
+
+  return `【模拟中文直译】${preview(text, 520)}
+
+这部分在真实 AI 接入后会逐句翻译为自然中文。当前 MVP 先保留原句结构，并把它作为中文学习笔记的依据。`;
+}
+
 function keywords(courseware: Courseware) {
   const words = courseware.fullText
     .replace(/[^\p{L}\p{N}\s-]/gu, " ")
@@ -39,18 +54,20 @@ function keywords(courseware: Courseware) {
 function buildTranslationStage(courseware: Courseware) {
   const terms = keywords(courseware);
   const pageSections = courseware.pages
-    .slice(0, 8)
+    .slice(0, 12)
     .map(
       (page) => `## 第 ${page.pageNumber} 页
 
 ### 直译
-${preview(page.text)}
+${mockTranslateToChinese(page.text)}
 
 ### 中文讲解
-这一页主要围绕课件中的关键表述展开。建议先识别定义、条件、步骤和例子，再把它们整理成自己的语言。
+这一页可以先当成老师在黑板上写出的“主干信息”。阅读时先找三个东西：它在定义什么、它想解决什么问题、它给了什么条件或例子。
+
+举个例子：如果这一页讲的是一个模型或方法，你可以把它想象成“做题工具”。定义告诉你工具叫什么，步骤告诉你怎么用，限制条件告诉你什么时候不要乱用。这样看课件会比逐字背诵更稳。
 
 ### 一句话总结
-第 ${page.pageNumber} 页的核心是：${preview(page.text, 54)}`
+第 ${page.pageNumber} 页的核心是：把本页信息翻成自己能复述的中文，并抓住它和整节课主题的关系。`
     )
     .join("\n\n");
 
