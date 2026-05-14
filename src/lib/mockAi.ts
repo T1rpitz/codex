@@ -8,9 +8,11 @@ export async function generateStageContent(
 ): Promise<string> {
   await delay(550);
 
+  if (stageId === "translation") {
+    return generateTranslationWithApi(courseware, stageId);
+  }
+
   switch (stageId) {
-    case "translation":
-      return buildTranslationStage(courseware);
     case "deepening":
       return buildDeepeningStage(courseware);
     case "exam":
@@ -20,6 +22,24 @@ export async function generateStageContent(
     default:
       return "";
   }
+}
+
+async function generateTranslationWithApi(courseware: Courseware, stageId: StageId) {
+  const response = await fetch("/api/stage", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ courseware, stageId })
+  });
+
+  const data = (await response.json()) as { content?: string; error?: string };
+
+  if (!response.ok) {
+    throw new Error(data.error ?? "第一阶段生成失败。");
+  }
+
+  return data.content ?? "";
 }
 
 function preview(text: string, length = 220) {
