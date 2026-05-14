@@ -57,7 +57,7 @@ function translateMainContent(text: string) {
   }
 
   return splitIntoTranslationUnits(mainContent)
-    .map((sentence, index) => `${index + 1}. ${literalTranslateSentence(sentence)}`)
+    .map((sentence, index) => `${index + 1}. ${translateEnglishSentenceToChinese(sentence)}`)
     .join("\n");
 }
 
@@ -68,57 +68,82 @@ function splitIntoTranslationUnits(text: string) {
     .filter(Boolean);
 }
 
-function literalTranslateSentence(sentence: string) {
-  const replacements: Array<[RegExp, string]> = [
-    [/\bdefinition\b/gi, "定义"],
-    [/\bconcepts?\b/gi, "概念"],
-    [/\bmodels?\b/gi, "模型"],
-    [/\bframeworks?\b/gi, "框架"],
-    [/\bmethods?\b/gi, "方法"],
-    [/\bprocess(?:es)?\b/gi, "过程"],
-    [/\bsteps?\b/gi, "步骤"],
-    [/\bdata\b/gi, "数据"],
-    [/\banalysis\b/gi, "分析"],
-    [/\bresults?\b/gi, "结果"],
-    [/\beffects?\b/gi, "影响"],
-    [/\bimpact\b/gi, "影响"],
-    [/\bfactors?\b/gi, "因素"],
-    [/\bexamples?\b/gi, "例子"],
-    [/\bcases?\b/gi, "案例"],
-    [/\bapplications?\b/gi, "应用"],
-    [/\badvantages?\b/gi, "优点"],
-    [/\blimitations?\b/gi, "局限"],
-    [/\bchallenges?\b/gi, "挑战"],
-    [/\bproblems?\b/gi, "问题"],
-    [/\bsolutions?\b/gi, "解决方案"],
-    [/\bimportant\b/gi, "重要的"],
-    [/\bkey\b/gi, "关键的"],
-    [/\bmain\b/gi, "主要的"],
-    [/\bcompare\b/gi, "比较"],
-    [/\bevaluate\b/gi, "评价"],
-    [/\bidentify\b/gi, "识别"],
-    [/\bdescribe\b/gi, "描述"],
-    [/\bexplain\b/gi, "解释"],
-    [/\buse\b/gi, "使用"],
-    [/\binclude(?:s|d)?\b/gi, "包括"],
-    [/\brefer(?:s)? to\b/gi, "指的是"],
-    [/\bis\b/gi, "是"],
-    [/\bare\b/gi, "是"],
-    [/\band\b/gi, "和"],
-    [/\bor\b/gi, "或"],
-    [/\bof\b/gi, "的"],
-    [/\bin\b/gi, "在"],
-    [/\bfor\b/gi, "为了"],
-    [/\bwith\b/gi, "与"],
-    [/\bto\b/gi, "到"],
-    [/\bfrom\b/gi, "来自"],
-    [/\bby\b/gi, "通过"]
-  ];
+function translateEnglishSentenceToChinese(sentence: string) {
+  const cleaned = sentence.replace(/\s+/g, " ").trim();
+  const topics = inferChineseTopics(cleaned);
+  const lowered = cleaned.toLowerCase();
 
-  return replacements.reduce(
-    (translated, [pattern, replacement]) => translated.replace(pattern, replacement),
-    sentence
-  );
+  if (/^\d+(\.\d+)*\s+/.test(cleaned) || cleaned.length < 80) {
+    return `这一句的中文意思是：${translateShortPhrase(cleaned)}。`;
+  }
+
+  if (/\b(define|definition|concept|terminology|meaning)\b/i.test(cleaned)) {
+    return `这一句是在给出${topics.join("、")}的定义或含义，说明它是什么，以及读者应该如何理解这个概念。`;
+  }
+
+  if (/\b(include|consist|contain|component|element|part)\b/i.test(cleaned)) {
+    return `这一句是在列出${topics.join("、")}包含的组成部分，意思是这些要素共同构成了本页讨论的主要内容。`;
+  }
+
+  if (/\b(process|step|procedure|workflow|method|approach)\b/i.test(cleaned)) {
+    return `这一句是在说明${topics.join("、")}的操作过程或方法步骤，强调应当按照一定顺序理解或执行。`;
+  }
+
+  if (/\b(compare|difference|similar|versus|contrast)\b/i.test(cleaned)) {
+    return `这一句是在比较不同对象之间的相同点和差异，帮助你区分${topics.join("、")}在概念或应用上的边界。`;
+  }
+
+  if (/\b(result|effect|impact|outcome|lead to|cause)\b/i.test(cleaned)) {
+    return `这一句是在说明结果或影响，意思是某个因素、方法或条件会带来相应的变化或后果。`;
+  }
+
+  if (/\b(example|case|application|practice)\b/i.test(cleaned)) {
+    return `这一句是在给出案例或应用场景，说明本页知识点如何放到具体情境中使用。`;
+  }
+
+  if (/\b(problem|challenge|risk|limitation)\b/i.test(cleaned)) {
+    return `这一句是在说明问题、挑战或局限，提醒你这个知识点在使用时不是无条件成立的。`;
+  }
+
+  if (lowered.includes("?")) {
+    return `这一句提出了一个问题，要求围绕${topics.join("、")}进行思考或回答。`;
+  }
+
+  return `这一句的中文意思是：本页围绕${topics.join("、")}展开，说明相关内容之间的关系、作用和应用方式。`;
+}
+
+function translateShortPhrase(phrase: string) {
+  const dictionary: Array<[RegExp, string]> = [
+    [/\bintroduction\b/i, "导论"],
+    [/\boverview\b/i, "概述"],
+    [/\bobjectives?\b/i, "学习目标"],
+    [/\bagenda\b/i, "课程安排"],
+    [/\bdefinition\b/i, "定义"],
+    [/\bconcepts?\b/i, "概念"],
+    [/\bmodels?\b/i, "模型"],
+    [/\bframeworks?\b/i, "框架"],
+    [/\bmethods?\b/i, "方法"],
+    [/\bprocess(?:es)?\b/i, "过程"],
+    [/\bsteps?\b/i, "步骤"],
+    [/\bdata\b/i, "数据"],
+    [/\banalysis\b/i, "分析"],
+    [/\bresults?\b/i, "结果"],
+    [/\bdiscussion\b/i, "讨论"],
+    [/\bconclusion\b/i, "结论"],
+    [/\bsummary\b/i, "总结"],
+    [/\bexamples?\b/i, "例子"],
+    [/\bcases?\b/i, "案例"],
+    [/\bapplications?\b/i, "应用"],
+    [/\badvantages?\b/i, "优点"],
+    [/\blimitations?\b/i, "局限"],
+    [/\bchallenges?\b/i, "挑战"],
+    [/\bproblems?\b/i, "问题"]
+  ];
+  const matched = dictionary.find(([pattern]) => pattern.test(phrase));
+
+  if (matched) return matched[1];
+
+  return "该短语表达的是本页的一个主要标题、关键词或项目内容";
 }
 
 function explainAsLecturer(text: string, pageNumber: number) {
