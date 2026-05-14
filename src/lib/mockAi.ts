@@ -49,14 +49,76 @@ function translateMainContent(text: string) {
 
   if (!mainContent) return "该页没有提取到可翻译的主要内容。";
   if (containsChinese(text)) {
-    return preview(mainContent, 900);
+    return mainContent
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("\n");
   }
 
-  const topics = inferChineseTopics(text);
+  return splitIntoTranslationUnits(mainContent)
+    .map((sentence, index) => `${index + 1}. ${literalTranslateSentence(sentence)}`)
+    .join("\n");
+}
 
-  return `本页主要内容可直译为：围绕${topics.join("、")}展开，说明相关概念、关系、条件或应用方式。
+function splitIntoTranslationUnits(text: string) {
+  return text
+    .split(/(?<=[.!?。！？])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
 
-主要信息：${preview(mainContent, 760)}`;
+function literalTranslateSentence(sentence: string) {
+  const replacements: Array<[RegExp, string]> = [
+    [/\bdefinition\b/gi, "定义"],
+    [/\bconcepts?\b/gi, "概念"],
+    [/\bmodels?\b/gi, "模型"],
+    [/\bframeworks?\b/gi, "框架"],
+    [/\bmethods?\b/gi, "方法"],
+    [/\bprocess(?:es)?\b/gi, "过程"],
+    [/\bsteps?\b/gi, "步骤"],
+    [/\bdata\b/gi, "数据"],
+    [/\banalysis\b/gi, "分析"],
+    [/\bresults?\b/gi, "结果"],
+    [/\beffects?\b/gi, "影响"],
+    [/\bimpact\b/gi, "影响"],
+    [/\bfactors?\b/gi, "因素"],
+    [/\bexamples?\b/gi, "例子"],
+    [/\bcases?\b/gi, "案例"],
+    [/\bapplications?\b/gi, "应用"],
+    [/\badvantages?\b/gi, "优点"],
+    [/\blimitations?\b/gi, "局限"],
+    [/\bchallenges?\b/gi, "挑战"],
+    [/\bproblems?\b/gi, "问题"],
+    [/\bsolutions?\b/gi, "解决方案"],
+    [/\bimportant\b/gi, "重要的"],
+    [/\bkey\b/gi, "关键的"],
+    [/\bmain\b/gi, "主要的"],
+    [/\bcompare\b/gi, "比较"],
+    [/\bevaluate\b/gi, "评价"],
+    [/\bidentify\b/gi, "识别"],
+    [/\bdescribe\b/gi, "描述"],
+    [/\bexplain\b/gi, "解释"],
+    [/\buse\b/gi, "使用"],
+    [/\binclude(?:s|d)?\b/gi, "包括"],
+    [/\brefer(?:s)? to\b/gi, "指的是"],
+    [/\bis\b/gi, "是"],
+    [/\bare\b/gi, "是"],
+    [/\band\b/gi, "和"],
+    [/\bor\b/gi, "或"],
+    [/\bof\b/gi, "的"],
+    [/\bin\b/gi, "在"],
+    [/\bfor\b/gi, "为了"],
+    [/\bwith\b/gi, "与"],
+    [/\bto\b/gi, "到"],
+    [/\bfrom\b/gi, "来自"],
+    [/\bby\b/gi, "通过"]
+  ];
+
+  return replacements.reduce(
+    (translated, [pattern, replacement]) => translated.replace(pattern, replacement),
+    sentence
+  );
 }
 
 function explainAsLecturer(text: string, pageNumber: number) {
