@@ -1,4 +1,5 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { createWorker } from "tesseract.js";
 import type { PdfPageText } from "@/types";
 
 type PdfTextItem = {
@@ -25,59 +26,121 @@ export async function extractPdfText(
     "PDF 打开时间过长。这个文件可能很大、被加密，或是扫描版图片 PDF。"
   );
   const pages: PdfPageText[] = [];
+  let ocrWorker: Awaited<ReturnType<typeof createWorker>> | null = null;
 
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    onProgress?.(pageNumber, document.numPages);
-    const page = await document.getPage(pageNumber);
-    const content = await withTimeout(
-      page.getTextContent(),
-      15000,
-      `第 ${pageNumber} 页文本提取时间过长。这个页面可能是图片扫描页。`
-    );
-    const text = content.items
-      .map((item) => item as PdfTextItem)
-      .filter((item) => item.str?.trim())
-      .sort((a, b) => {
-        const ay = a.transform?.[5] ?? 0;
-        const by = b.transform?.[5] ?? 0;
-        const ax = a.transform?.[4] ?? 0;
-        const bx = b.transform?.[4] ?? 0;
+  try {
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      onProgress?.(pageNumber, document.numPages);
+      const page = await document.getPage(pageNumber);
+      const content = await withTimeout(
+        page.getTextContent(),
+        15000,
+        `第 ${pageNumber} 页文本提取时间过长。这个页面可能是图片扫描页。`
+      );
+      const selectableText = normalizeExtractedText(content.items);
+      let ocrText = "";
 
-        if (Math.abs(by - ay) > 4) return by - ay;
-        return ax - bx;
-      })
-      .reduce(
-        (result, item) => {
-          const y = item.transform?.[5] ?? result.lastY;
-          const shouldBreakLine =
-            result.parts.length > 0 && Math.abs(y - result.lastY) > 4;
+      if (shouldRunOcr(selectableText)) {
+        ocrWorker ??= await createWorker("eng");
+        ocrText = await withTimeout(
+          recognizePageText(page, ocrWorker),
+          30000,
+          `第 ${pageNumber} 页图片文字识别时间过长。`
+        );
+      }
 
-          if (shouldBreakLine) {
-            result.parts.push("\n");
-          } else if (result.parts.length > 0 && result.parts.at(-1) !== "\n") {
-            result.parts.push(" ");
-          }
-
-          result.parts.push(item.str?.trim() ?? "");
-          if (item.hasEOL) result.parts.push("\n");
-          result.lastY = y;
-
-          return result;
-        },
-        { parts: [] as string[], lastY: Number.POSITIVE_INFINITY }
-      )
-      .parts.join("")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-
-    pages.push({
-      pageNumber,
-      text
-    });
+      pages.push({
+        pageNumber,
+        text: mergePageText(selectableText, ocrText),
+        ocrText
+      });
+    }
+  } finally {
+    await ocrWorker?.terminate();
   }
 
   return pages;
+}
+
+function normalizeExtractedText(items: unknown[]) {
+  return items
+    .map((item) => item as PdfTextItem)
+    .filter((item) => item.str?.trim())
+    .sort((a, b) => {
+      const ay = a.transform?.[5] ?? 0;
+      const by = b.transform?.[5] ?? 0;
+      const ax = a.transform?.[4] ?? 0;
+      const bx = b.transform?.[4] ?? 0;
+
+      if (Math.abs(by - ay) > 4) return by - ay;
+      return ax - bx;
+    })
+    .reduce(
+      (result, item) => {
+        const y = item.transform?.[5] ?? result.lastY;
+        const shouldBreakLine =
+          result.parts.length > 0 && Math.abs(y - result.lastY) > 4;
+
+        if (shouldBreakLine) {
+          result.parts.push("\n");
+        } else if (result.parts.length > 0 && result.parts.at(-1) !== "\n") {
+          result.parts.push(" ");
+        }
+
+        result.parts.push(item.str?.trim() ?? "");
+        if (item.hasEOL) result.parts.push("\n");
+        result.lastY = y;
+
+        return result;
+      },
+      { parts: [] as string[], lastY: Number.POSITIVE_INFINITY }
+    )
+    .parts.join("")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function shouldRunOcr(selectableText: string) {
+  return selectableText.length < 800;
+}
+
+async function recognizePageText(
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>["getPage"]>>,
+  worker: Awaited<ReturnType<typeof createWorker>>
+) {
+  const viewport = page.getViewport({ scale: 1.75 });
+  const canvas = window.document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) return "";
+
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({
+    canvasContext: context,
+    viewport
+  }).promise;
+
+  const result = await worker.recognize(canvas);
+
+  return result.data.text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function mergePageText(selectableText: string, ocrText: string) {
+  if (!ocrText) return selectableText;
+  if (!selectableText) return ocrText;
+
+  const lines = [...selectableText.split(/\n+/), ...ocrText.split(/\n+/)]
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(lines)).join("\n");
 }
 
 export async function renderPdfPageImages(

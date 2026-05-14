@@ -5,6 +5,7 @@ export type StageId = "translation" | "deepening" | "exam" | "exploration";
 export type PdfPageText = {
   pageNumber: number;
   text: string;
+  ocrText?: string;
 };
 
 export type Courseware = {
