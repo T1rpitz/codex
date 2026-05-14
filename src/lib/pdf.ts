@@ -80,6 +80,51 @@ export async function extractPdfText(
   return pages;
 }
 
+export async function renderPdfPageImages(
+  file: File,
+  maxPages = 30
+): Promise<string[]> {
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+  const data = await file.arrayBuffer();
+  const document = await withTimeout(
+    pdfjs.getDocument({
+      data,
+      useWorkerFetch: false,
+      isEvalSupported: false
+    }).promise,
+    25000,
+    "PDF 预览生成时间过长。"
+  );
+  const pageImages: string[] = [];
+  const totalPages = Math.min(document.numPages, maxPages);
+
+  for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+    const page = await document.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1.35 });
+    const canvas = window.document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) continue;
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await withTimeout(
+      page.render({
+        canvasContext: context,
+        viewport
+      }).promise,
+      15000,
+      `第 ${pageNumber} 页预览生成时间过长。`
+    );
+
+    pageImages.push(canvas.toDataURL("image/png"));
+  }
+
+  return pageImages;
+}
+
 async function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 

@@ -16,7 +16,7 @@ import {
   Sparkles,
   UploadCloud
 } from "lucide-react";
-import { extractPdfText } from "@/lib/pdf";
+import { extractPdfText, renderPdfPageImages } from "@/lib/pdf";
 import { generateStageContent } from "@/lib/mockAi";
 import {
   buildAnkiCsv,
@@ -95,12 +95,15 @@ export default function Home() {
       const pages = await extractPdfText(file, (currentPage, totalPages) => {
         setUploadProgress(`正在提取第 ${currentPage} / ${totalPages} 页`);
       });
+      setUploadProgress("正在生成右侧 PDF 原文预览...");
+      const pageImages = await renderPdfPageImages(file);
       const fileUrl = URL.createObjectURL(file);
       const nextCourseware: Courseware = {
         id: crypto.randomUUID(),
         name: file.name.replace(/\.pdf$/i, ""),
         fileName: file.name,
         fileUrl,
+        pageImages,
         uploadedAt: new Date().toISOString(),
         pageCount: pages.length,
         pages,
@@ -275,30 +278,47 @@ export default function Home() {
                   </a>
                 </div>
               </div>
-              <object
-                className="min-h-0 flex-1 rounded-lg border border-line bg-paper"
-                data={`${selectedCourseware.fileUrl}#toolbar=1&navpanes=0&view=FitH`}
-                type="application/pdf"
-              >
-                <embed
-                  className="h-full w-full rounded-lg"
-                  src={`${selectedCourseware.fileUrl}#toolbar=1&navpanes=0&view=FitH`}
-                  type="application/pdf"
-                />
-                <div className="grid h-full place-items-center p-6 text-center">
-                  <div>
-                    <p className="font-medium">当前浏览器没有显示内嵌 PDF。</p>
-                    <a
-                      className="mt-3 inline-flex rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white"
-                      href={selectedCourseware.fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      打开 PDF
-                    </a>
+              <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-line bg-paper p-3">
+                {selectedCourseware.pageImages.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedCourseware.pageImages.map((image, index) => (
+                      <figure
+                        key={image}
+                        className="overflow-hidden rounded-lg border border-line bg-white shadow-sm"
+                      >
+                        <figcaption className="border-b border-line px-3 py-2 text-xs font-medium text-ink/58">
+                          第 {index + 1} 页
+                        </figcaption>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          className="h-auto w-full"
+                          src={image}
+                          alt={`${selectedCourseware.fileName} 第 ${index + 1} 页`}
+                        />
+                      </figure>
+                    ))}
+                    {selectedCourseware.pageCount > selectedCourseware.pageImages.length ? (
+                      <p className="rounded-lg bg-white px-3 py-2 text-sm text-ink/58">
+                        已显示前 {selectedCourseware.pageImages.length} 页。完整文件可点“新标签打开”查看。
+                      </p>
+                    ) : null}
                   </div>
-                </div>
-              </object>
+                ) : (
+                  <div className="grid h-full place-items-center p-6 text-center">
+                    <div>
+                      <p className="font-medium">暂时没有生成 PDF 页面预览。</p>
+                      <a
+                        className="mt-3 inline-flex rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white"
+                        href={selectedCourseware.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        打开 PDF
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
             </section>
           </div>
         ) : (
