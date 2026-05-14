@@ -261,15 +261,44 @@ export default function Home() {
                   <h2 className="font-semibold">PDF 原文</h2>
                   <p className="mt-1 text-sm text-ink/52">{selectedCourseware.fileName}</p>
                 </div>
-                <span className="rounded-md bg-paper px-2 py-1 text-xs text-ink/58">
-                  {selectedCourseware.pageCount} 页
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md bg-paper px-2 py-1 text-xs text-ink/58">
+                    {selectedCourseware.pageCount} 页
+                  </span>
+                  <a
+                    className="rounded-md border border-line bg-white px-2 py-1 text-xs font-medium text-ink/68 transition hover:border-pine hover:text-pine"
+                    href={selectedCourseware.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    新标签打开
+                  </a>
+                </div>
               </div>
-              <iframe
+              <object
                 className="min-h-0 flex-1 rounded-lg border border-line bg-paper"
-                src={selectedCourseware.fileUrl}
-                title={`${selectedCourseware.name} PDF`}
-              />
+                data={`${selectedCourseware.fileUrl}#toolbar=1&navpanes=0&view=FitH`}
+                type="application/pdf"
+              >
+                <embed
+                  className="h-full w-full rounded-lg"
+                  src={`${selectedCourseware.fileUrl}#toolbar=1&navpanes=0&view=FitH`}
+                  type="application/pdf"
+                />
+                <div className="grid h-full place-items-center p-6 text-center">
+                  <div>
+                    <p className="font-medium">当前浏览器没有显示内嵌 PDF。</p>
+                    <a
+                      className="mt-3 inline-flex rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white"
+                      href={selectedCourseware.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      打开 PDF
+                    </a>
+                  </div>
+                </div>
+              </object>
             </section>
           </div>
         ) : (

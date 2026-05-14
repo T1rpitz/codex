@@ -37,9 +37,31 @@ function mockTranslateToChinese(text: string) {
     return `本页已经包含中文内容。以下是整理后的中文表达：${preview(text, 520)}`;
   }
 
-  return `【模拟中文直译】${preview(text, 520)}
+  const topics = inferChineseTopics(text);
 
-这部分在真实 AI 接入后会逐句翻译为自然中文。当前 MVP 先保留原句结构，并把它作为中文学习笔记的依据。`;
+  return `本页主要在说明${topics.join("、")}等内容。可以把它理解为：课件先提出一个核心概念，再说明这个概念为什么重要、包含哪些组成部分，以及它通常如何应用到具体问题中。
+
+更直白地说，这一页想让你掌握的是：先看清楚主题，再分清定义、条件、步骤和结果之间的关系。`;
+}
+
+function inferChineseTopics(text: string) {
+  const dictionary: Array<[RegExp, string]> = [
+    [/definition|concept|terminology|meaning/i, "概念定义"],
+    [/model|framework|theory|approach/i, "理论框架"],
+    [/method|process|procedure|step|workflow/i, "方法步骤"],
+    [/data|dataset|evidence|measurement/i, "数据与证据"],
+    [/analysis|evaluate|assessment|compare/i, "分析与评价"],
+    [/case|example|application|practice/i, "案例应用"],
+    [/risk|limitation|challenge|problem/i, "限制与问题"],
+    [/result|outcome|impact|effect/i, "结果与影响"],
+    [/strategy|policy|decision|management/i, "策略与决策"],
+    [/system|structure|component|architecture/i, "系统结构"]
+  ];
+  const matched = dictionary
+    .filter(([pattern]) => pattern.test(text))
+    .map(([, label]) => label);
+
+  return matched.length > 0 ? Array.from(new Set(matched)).slice(0, 4) : ["课程主题", "关键术语", "知识点关系"];
 }
 
 function keywords(courseware: Courseware) {
@@ -76,7 +98,7 @@ ${mockTranslateToChinese(page.text)}
 ${pageSections}
 
 ## 术语表
-${terms.map((term) => `- **${term}**：课件中的高频术语，后续可替换为真实 AI 生成的精确定义。`).join("\n")}
+${terms.map((term, index) => `- **术语 ${index + 1}**：${term}。复习时请把它翻成中文定义，并补一个自己的例子。`).join("\n")}
 
 ## 整节课总结
 本节课围绕「${courseware.name}」展开。先建立术语和基本概念，再理解每页之间的逻辑关系，最后把知识点转化为可复述、可做题、可迁移的学习材料。`;
