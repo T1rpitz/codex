@@ -57,7 +57,7 @@ function translateMainContent(text: string) {
   }
 
   return splitIntoTranslationUnits(mainContent)
-    .map((sentence, index) => `${index + 1}. ${translateEnglishSentenceToChinese(sentence)}`)
+    .map((sentence) => translateEnglishSentenceToChinese(sentence))
     .join("\n");
 }
 
@@ -74,42 +74,42 @@ function translateEnglishSentenceToChinese(sentence: string) {
   const lowered = cleaned.toLowerCase();
 
   if (/^\d+(\.\d+)*\s+/.test(cleaned) || cleaned.length < 80) {
-    return `这一句的中文意思是：${translateShortPhrase(cleaned)}。`;
+    return translateShortPhrase(cleaned);
   }
 
   if (/\b(define|definition|concept|terminology|meaning)\b/i.test(cleaned)) {
-    return `这一句是在给出${topics.join("、")}的定义或含义，说明它是什么，以及读者应该如何理解这个概念。`;
+    return `${topics.join("、")}的定义或含义，以及这个概念的基本理解方式。`;
   }
 
   if (/\b(include|consist|contain|component|element|part)\b/i.test(cleaned)) {
-    return `这一句是在列出${topics.join("、")}包含的组成部分，意思是这些要素共同构成了本页讨论的主要内容。`;
+    return `${topics.join("、")}包含的组成部分，以及这些要素共同构成的主要内容。`;
   }
 
   if (/\b(process|step|procedure|workflow|method|approach)\b/i.test(cleaned)) {
-    return `这一句是在说明${topics.join("、")}的操作过程或方法步骤，强调应当按照一定顺序理解或执行。`;
+    return `${topics.join("、")}的操作过程或方法步骤，以及需要按顺序理解或执行的内容。`;
   }
 
   if (/\b(compare|difference|similar|versus|contrast)\b/i.test(cleaned)) {
-    return `这一句是在比较不同对象之间的相同点和差异，帮助你区分${topics.join("、")}在概念或应用上的边界。`;
+    return `不同对象之间的相同点和差异，以及${topics.join("、")}在概念或应用上的边界。`;
   }
 
   if (/\b(result|effect|impact|outcome|lead to|cause)\b/i.test(cleaned)) {
-    return `这一句是在说明结果或影响，意思是某个因素、方法或条件会带来相应的变化或后果。`;
+    return `相关因素、方法或条件带来的结果、影响、变化或后果。`;
   }
 
   if (/\b(example|case|application|practice)\b/i.test(cleaned)) {
-    return `这一句是在给出案例或应用场景，说明本页知识点如何放到具体情境中使用。`;
+    return `案例或应用场景，以及本页知识点在具体情境中的使用方式。`;
   }
 
   if (/\b(problem|challenge|risk|limitation)\b/i.test(cleaned)) {
-    return `这一句是在说明问题、挑战或局限，提醒你这个知识点在使用时不是无条件成立的。`;
+    return `问题、挑战或局限，以及这个知识点在使用时需要注意的条件。`;
   }
 
   if (lowered.includes("?")) {
-    return `这一句提出了一个问题，要求围绕${topics.join("、")}进行思考或回答。`;
+    return `围绕${topics.join("、")}提出的问题。`;
   }
 
-  return `这一句的中文意思是：本页围绕${topics.join("、")}展开，说明相关内容之间的关系、作用和应用方式。`;
+  return `${topics.join("、")}之间的关系、作用和应用方式。`;
 }
 
 function translateShortPhrase(phrase: string) {
@@ -117,7 +117,13 @@ function translateShortPhrase(phrase: string) {
     [/\bintroduction\b/i, "导论"],
     [/\boverview\b/i, "概述"],
     [/\bobjectives?\b/i, "学习目标"],
+    [/\blearning outcomes?\b/i, "学习成果"],
     [/\bagenda\b/i, "课程安排"],
+    [/\bcontents?\b/i, "内容"],
+    [/\btable of contents?\b/i, "目录"],
+    [/\bbackground\b/i, "背景"],
+    [/\bkey terms?\b/i, "关键术语"],
+    [/\bquestions?\b/i, "问题"],
     [/\bdefinition\b/i, "定义"],
     [/\bconcepts?\b/i, "概念"],
     [/\bmodels?\b/i, "模型"],
@@ -143,7 +149,7 @@ function translateShortPhrase(phrase: string) {
 
   if (matched) return matched[1];
 
-  return "该短语表达的是本页的一个主要标题、关键词或项目内容";
+  return "主要标题、关键词或项目内容";
 }
 
 function explainAsLecturer(text: string, pageNumber: number) {
