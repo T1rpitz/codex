@@ -1,0 +1,31 @@
+import type { PdfPageText } from "@/types";
+
+type PdfTextItem = {
+  str?: string;
+};
+
+export async function extractPdfText(file: File): Promise<PdfPageText[]> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+  const data = await file.arrayBuffer();
+  const document = await pdfjs.getDocument({ data }).promise;
+  const pages: PdfPageText[] = [];
+
+  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    const page = await document.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item) => (item as PdfTextItem).str ?? "")
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    pages.push({
+      pageNumber,
+      text
+    });
+  }
+
+  return pages;
+}
