@@ -16,7 +16,7 @@ import {
   Sparkles,
   UploadCloud
 } from "lucide-react";
-import { extractPdfText, renderPdfPageImages } from "@/lib/pdf";
+import { extractPdfText, renderPdfPageImagesFromUrl } from "@/lib/pdf";
 import { generateStageContent } from "@/lib/mockAi";
 import {
   buildAnkiCsv,
@@ -70,6 +70,8 @@ export default function Home() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [generatingStage, setGeneratingStage] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [previewImages, setPreviewImages] = useState<Record<string, string[]>>({});
+  const [previewStatus, setPreviewStatus] = useState<Record<string, string>>({});
 
   const selectedCourseware = useMemo(
     () => coursewares.find((item) => item.id === selectedId) ?? null,
@@ -95,15 +97,12 @@ export default function Home() {
       const pages = await extractPdfText(file, (currentPage, totalPages) => {
         setUploadProgress(`正在提取第 ${currentPage} / ${totalPages} 页`);
       });
-      setUploadProgress("正在生成右侧 PDF 原文预览...");
-      const pageImages = await renderPdfPageImages(file);
       const fileUrl = URL.createObjectURL(file);
       const nextCourseware: Courseware = {
         id: crypto.randomUUID(),
         name: file.name.replace(/\.pdf$/i, ""),
         fileName: file.name,
         fileUrl,
-        pageImages,
         uploadedAt: new Date().toISOString(),
         pageCount: pages.length,
         pages,
@@ -175,7 +174,37 @@ export default function Home() {
 
   function openStage(stageId: LearningStage["id"]) {
     setActiveStageId(stageId);
-    if (selectedCourseware) setView("stage");
+    if (selectedCourseware) {
+      setView("stage");
+      if (stageId === "translation") void ensurePdfPreview(selectedCourseware);
+    }
+  }
+
+  async function ensurePdfPreview(courseware: Courseware) {
+    if (previewImages[courseware.id] || previewStatus[courseware.id]) return;
+
+    setPreviewStatus((current) => ({
+      ...current,
+      [courseware.id]: "正在生成 PDF 原文预览..."
+    }));
+
+    try {
+      const images = await renderPdfPageImagesFromUrl(courseware.fileUrl);
+      setPreviewImages((current) => ({
+        ...current,
+        [courseware.id]: images
+      }));
+      setPreviewStatus((current) => ({
+        ...current,
+        [courseware.id]: images.length > 0 ? "" : "未生成预览，可用新标签打开 PDF。"
+      }));
+    } catch (previewError) {
+      setPreviewStatus((current) => ({
+        ...current,
+        [courseware.id]:
+          previewError instanceof Error ? previewError.message : "PDF 原文预览生成失败。"
+      }));
+    }
   }
 
   const stageEditor = selectedCourseware ? (
@@ -216,7 +245,10 @@ export default function Home() {
                       ? "border-pine bg-pine text-white"
                       : "border-line bg-white hover:border-pine"
                   }`}
-                  onClick={() => setActiveStageId(stage.id)}
+                  onClick={() => {
+                    setActiveStageId(stage.id);
+                    if (stage.id === "translation") void ensurePdfPreview(selectedCourseware);
+                  }}
                 >
                   {stage.subtitle}
                 </button>
@@ -279,9 +311,9 @@ export default function Home() {
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-line bg-paper p-3">
-                {selectedCourseware.pageImages.length > 0 ? (
+                {previewImages[selectedCourseware.id]?.length > 0 ? (
                   <div className="space-y-4">
-                    {selectedCourseware.pageImages.map((image, index) => (
+                    {previewImages[selectedCourseware.id].map((image, index) => (
                       <figure
                         key={image}
                         className="overflow-hidden rounded-lg border border-line bg-white shadow-sm"
@@ -297,18 +329,26 @@ export default function Home() {
                         />
                       </figure>
                     ))}
-                    {selectedCourseware.pageCount > selectedCourseware.pageImages.length ? (
+                    {selectedCourseware.pageCount > previewImages[selectedCourseware.id].length ? (
                       <p className="rounded-lg bg-white px-3 py-2 text-sm text-ink/58">
-                        已显示前 {selectedCourseware.pageImages.length} 页。完整文件可点“新标签打开”查看。
+                        已显示前 {previewImages[selectedCourseware.id].length} 页。完整文件可点“新标签打开”查看。
                       </p>
                     ) : null}
                   </div>
                 ) : (
                   <div className="grid h-full place-items-center p-6 text-center">
                     <div>
-                      <p className="font-medium">暂时没有生成 PDF 页面预览。</p>
+                      <p className="font-medium">
+                        {previewStatus[selectedCourseware.id] || "点击下方按钮生成 PDF 原文预览。"}
+                      </p>
+                      <button
+                        className="mt-3 inline-flex rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-ink transition hover:border-pine hover:text-pine"
+                        onClick={() => void ensurePdfPreview(selectedCourseware)}
+                      >
+                        生成右侧预览
+                      </button>
                       <a
-                        className="mt-3 inline-flex rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white"
+                        className="ml-2 mt-3 inline-flex rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white"
                         href={selectedCourseware.fileUrl}
                         target="_blank"
                         rel="noreferrer"

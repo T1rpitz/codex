@@ -84,9 +84,25 @@ export async function renderPdfPageImages(
   file: File,
   maxPages = 30
 ): Promise<string[]> {
+  const data = await file.arrayBuffer();
+  return renderPdfPageImagesFromArrayBuffer(data, maxPages);
+}
+
+export async function renderPdfPageImagesFromUrl(
+  fileUrl: string,
+  maxPages = 30
+): Promise<string[]> {
+  const response = await fetch(fileUrl);
+  const data = await response.arrayBuffer();
+  return renderPdfPageImagesFromArrayBuffer(data, maxPages);
+}
+
+async function renderPdfPageImagesFromArrayBuffer(
+  data: ArrayBuffer,
+  maxPages: number
+): Promise<string[]> {
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-  const data = await file.arrayBuffer();
   const document = await withTimeout(
     pdfjs.getDocument({
       data,
