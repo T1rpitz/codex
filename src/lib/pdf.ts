@@ -1,3 +1,4 @@
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PdfPageText } from "@/types";
 
 type PdfTextItem = {
@@ -5,7 +6,6 @@ type PdfTextItem = {
 };
 
 export async function extractPdfText(file: File): Promise<PdfPageText[]> {
-  const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
   const data = await file.arrayBuffer();
