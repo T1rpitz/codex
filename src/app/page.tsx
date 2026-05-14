@@ -67,6 +67,7 @@ export default function Home() {
   const [view, setView] = useState<"dashboard" | "stage">("dashboard");
   const [outputs, setOutputs] = useState<Record<string, StageOutput>>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [generatingStage, setGeneratingStage] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -89,8 +90,11 @@ export default function Home() {
 
     setError("");
     setIsUploading(true);
+    setUploadProgress("正在打开 PDF...");
     try {
-      const pages = await extractPdfText(file);
+      const pages = await extractPdfText(file, (currentPage, totalPages) => {
+        setUploadProgress(`正在提取第 ${currentPage} / ${totalPages} 页`);
+      });
       const fileUrl = URL.createObjectURL(file);
       const nextCourseware: Courseware = {
         id: crypto.randomUUID(),
@@ -110,6 +114,7 @@ export default function Home() {
       setError(uploadError instanceof Error ? uploadError.message : "PDF 解析失败。");
     } finally {
       setIsUploading(false);
+      setUploadProgress("");
     }
   }
 
@@ -302,7 +307,9 @@ export default function Home() {
             <UploadCloud className="mb-3 text-pine" size={30} />
           )}
           <span className="font-medium">{isUploading ? "正在提取文本" : "上传 PDF 课件"}</span>
-          <span className="mt-1 text-xs text-ink/56">文本会在本地浏览器中解析</span>
+          <span className="mt-1 text-xs text-ink/56">
+            {isUploading ? uploadProgress : "文本会在本地浏览器中解析"}
+          </span>
           <input
             className="hidden"
             type="file"

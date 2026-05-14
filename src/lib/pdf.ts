@@ -7,16 +7,33 @@ type PdfTextItem = {
   hasEOL?: boolean;
 };
 
-export async function extractPdfText(file: File): Promise<PdfPageText[]> {
+export async function extractPdfText(
+  file: File,
+  onProgress?: (currentPage: number, totalPages: number) => void
+): Promise<PdfPageText[]> {
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
   const data = await file.arrayBuffer();
-  const document = await pdfjs.getDocument({ data }).promise;
+  const loadingTask = pdfjs.getDocument({
+    data,
+    useWorkerFetch: false,
+    isEvalSupported: false
+  });
+  const document = await withTimeout(
+    loadingTask.promise,
+    25000,
+    "PDF 打开时间过长。这个文件可能很大、被加密，或是扫描版图片 PDF。"
+  );
   const pages: PdfPageText[] = [];
 
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    onProgress?.(pageNumber, document.numPages);
     const page = await document.getPage(pageNumber);
-    const content = await page.getTextContent();
+    const content = await withTimeout(
+      page.getTextContent(),
+      15000,
+      `第 ${pageNumber} 页文本提取时间过长。这个页面可能是图片扫描页。`
+    );
     const text = content.items
       .map((item) => item as PdfTextItem)
       .filter((item) => item.str?.trim())
@@ -61,4 +78,19 @@ export async function extractPdfText(file: File): Promise<PdfPageText[]> {
   }
 
   return pages;
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), ms);
+      })
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
